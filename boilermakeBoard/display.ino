@@ -2,7 +2,10 @@
 #define AR_SIZE( a ) sizeof( a ) / sizeof( a[0] )
 
 
-unsigned char en_char1[]=" BoilerBake 420 ";
+unsigned char en_char1[]=" Stockoholic: ";
+unsigned char en_char2[]=" Big Data, Stocks ";
+unsigned char en_char3[]=" Bloomberg ";
+
 
 void initDisplay()
 {
@@ -12,6 +15,8 @@ void initDisplay()
   LCDA.CLEAR();
   delay(100);
   LCDA.DisplayString(0,0,en_char1,16); 
+   LCDA.DisplayString(1,0,en_char2,16); 
+    LCDA.DisplayString(2,0,en_char3,16); 
   delay(30);
 }
-const int slaveSelectPin = 10;
+
