@@ -100,7 +100,7 @@ void setup() {
   digitalWrite(SROEPin, HIGH);
   digitalWrite(SRLatchPin, LOW);
   
-  void initDisplay();
+  initDisplay();
 
   // Display welcome message
   welcomeMessage();
@@ -486,5 +486,7 @@ void welcomeMessage(void) {
 }
 
 
+
+ 
 
 
