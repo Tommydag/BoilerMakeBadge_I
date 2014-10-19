@@ -1,3 +1,8 @@
+
+
+
+
+// Original Code credit goes to:
 /* vim: set ts=2 sw=2 sts=2 et! : */
 //
 // BoilerMake Fall 2014 Badge Code
@@ -14,6 +19,9 @@
 // Happy Hacking!
 //
 
+// Modifications, additions and removals:
+// Rose-Hulman Hackers: Tom D'Agostino, Graham Fuller, Tommy Mulc, Asian Luke
+
 #define MAX_TERMINAL_LINE_LEN 40
 #define MAX_TERMINAL_WORDS     7
 
@@ -25,7 +33,11 @@
 #include <RF24.h>
 #include <SPI.h>
 #include <EEPROM.h>
+#include "pitches.h"
+#include <LCD12864RSPI.h>
+#include "stdlib.h"
 
+void initDisplay(void);
 void welcomeMessage(void);
 void printHelpText(void);
 void printPrompt(void);
@@ -47,7 +59,7 @@ const byte MESS   = 2; // Message
 const byte DEMO   = 3; // Demo Pattern
 
 // Global Variables
-int SROEPin = 3; // using digital pin 3 for SR !OE
+int SROEPin = 6; // using digital pin 3 for SR !OE
 int SRLatchPin = 8; // using digital pin 4 for SR latch
 boolean terminalConnect = false; // indicates if the terminal has connected to the board yet
 
@@ -64,7 +76,8 @@ struct payload{ // Payload structure
 
 // This runs once on boot
 void setup() {
-  Serial.begin(9600);
+  pinMode(3,INPUT);
+  Serial.begin(57600);
 
   // SPI initializations
   SPI.begin();
@@ -73,24 +86,28 @@ void setup() {
 
   // nRF radio initializations
   radio.begin();
-  radio.setDataRate(RF24_1MBPS); // 1Mbps transfer rate
+  radio.setDataRate(RF24_2MBPS); // 2Mbps transfer rate
   radio.setCRCLength(RF24_CRC_16); // 16-bit CRC
-  radio.setChannel(80); // Channel center frequency = 2.4005 GHz + (Channel# * 1 MHz)
-  radio.setRetries(200, 5); // set the delay and number of retries upon failed transmit
+  radio.setChannel(40); // Channel center frequency = 2.4005 GHz + (Channel# * 1 MHz)
+  radio.setRetries(200, 6); // set the delay and number of retries upon failed transmit
   radio.openReadingPipe(0, this_node_address); // Open this address
   radio.startListening(); // Start listening on opened address
+  radio.setPALevel(RF24_PA_HIGH);
 
   // Shift register pin initializations
   pinMode(SROEPin, OUTPUT);
   pinMode(SRLatchPin, OUTPUT);
   digitalWrite(SROEPin, HIGH);
   digitalWrite(SRLatchPin, LOW);
+  
+  void initDisplay();
 
   // Display welcome message
   welcomeMessage();
 
   // make the pretty LEDs happen
   ledDisplay(2);
+  playTone();
 }
 
 
@@ -100,7 +117,8 @@ void loop() {
   if (Serial && !terminalConnect) { 
     welcomeMessage();
     terminalConnect = true;
-  } else if (!Serial && terminalConnect) {
+  } 
+  else if (!Serial && terminalConnect) {
     terminalConnect = false;
   }
 
@@ -133,7 +151,8 @@ void serialRead() {
     if (inChar == '\r'){
       inData[index] = '\0';
       break;
-    } else {
+    } 
+    else {
       inData[index] = inChar;
       index++;
     }
@@ -141,6 +160,7 @@ void serialRead() {
 
   if (index > 0){ // if we read some data, then process it
     Serial.println(inData);
+    
     handleSerialData(inData, index);
     printPrompt();
   }
@@ -162,15 +182,19 @@ void handleSerialData(char inData[], byte index) {
   if (strcmp(words[0], "help") == 0) {
     printHelpText();
 
-  } else if (strcmp(words[0], "send") == 0) {
+  } 
+  else if (strcmp(words[0], "send") == 0) {
     // checks if address field was given valid characters
     if ((strspn(words[1], "1234567890AaBbCcDdEeFf") <= 4)
-        && (strspn(words[1], "1234567890AaBbCcDdEeFf") > 0)) {
+      && (strspn(words[1], "1234567890AaBbCcDdEeFf") > 0)) {
 
       uint16_t TOaddr = strtol(words[1], NULL, 16);
 
       if (strncmp(words[2], "-p", 2) == 0) { // Send ping
-        struct payload myPayload = {PING, '\0', {'\0'}};
+        struct payload myPayload = {
+          PING, '\0', {
+            '\0'                    }
+        };
         size_t len = sizeof(PING) + sizeof('\0') * 2;
 
         radio.stopListening();
@@ -178,10 +202,14 @@ void handleSerialData(char inData[], byte index) {
         radio.write(&myPayload, len);
         radio.startListening();
 
-      } else if (strcmp(words[2], "-l") == 0) { // Send LED pattern
+      } 
+      else if (strcmp(words[2], "-l") == 0) { // Send LED pattern
         if (strspn(words[3], "1234567890") == 1) {
           byte led_patt = (byte) atoi(words[3]);
-          struct payload myPayload = {LED, led_patt, {'\0'}};
+          struct payload myPayload = {
+            LED, led_patt, {
+              '\0'                        }
+          };
           size_t len = sizeof(LED) + sizeof(led_patt) + sizeof('\0');
 
           radio.stopListening();
@@ -194,7 +222,8 @@ void handleSerialData(char inData[], byte index) {
           Serial.println("  Invalid LED pattern field.");
         }
 
-      } else if (strcmp(words[2], "-m") == 0) { // Send message
+      } 
+      else if (strcmp(words[2], "-m") == 0) { // Send message
         char str_msg[MAX_TERMINAL_MESSAGE_LEN];
 
         char * curr_pos = str_msg;
@@ -210,7 +239,10 @@ void handleSerialData(char inData[], byte index) {
           }
         }
 
-        struct payload myPayload = {MESS, '\0', {}};
+        struct payload myPayload = {
+          MESS, '\0', {
+          }
+        };
 
         // the end of the string minus the start of the string gives the length
         memcpy(&myPayload.message, str_msg, curr_pos - str_msg);
@@ -230,7 +262,8 @@ void handleSerialData(char inData[], byte index) {
       Serial.println("  Invalid address field.");
     }
 
-  } else if (strcmp(words[0], "channel") == 0) {
+  } 
+  else if (strcmp(words[0], "channel") == 0) {
 
     // Set radio channel
     byte chn = (byte) atoi(words[1]);
@@ -239,19 +272,23 @@ void handleSerialData(char inData[], byte index) {
       Serial.print("Channel is now set to ");
       Serial.println(chn);
       radio.setChannel(chn);
-    } else {
+    } 
+    else {
       Serial.println(" Invalid channel number. Legal channels are 0 - 83.");
     }
 
-  } else if (strcmp(words[0], "radio") == 0) {
+  } 
+  else if (strcmp(words[0], "radio") == 0) {
     // Turn radio listening on/off
     if (strcmp(words[1], "on") == 0) {
       Serial.println("Radio is now in listening mode");
       radio.startListening();
-    } else if (strcmp(words[1], "off") == 0) {
+    } 
+    else if (strcmp(words[1], "off") == 0) {
       Serial.println("Radio is now NOT in listening mode");
       radio.stopListening();
-    } else {
+    } 
+    else {
       Serial.println(" Invalid syntax.");
     }
   }
@@ -262,28 +299,28 @@ void handleSerialData(char inData[], byte index) {
 void handlePayload(struct payload * myPayload) {
   switch(myPayload->command) {
 
-    case PING:
-      Serial.println("Someone pinged us!");
-      printPrompt();
-      break;
+  case PING:
+    Serial.println("Someone pinged us!");
+    printPrompt();
+    break;
 
-    case LED:
-      ledDisplay(myPayload->led_pattern);
-      break;
+  case LED:
+    ledDisplay(myPayload->led_pattern);
+    break;
 
-    case MESS:
-      Serial.print("Message:\r\n  ");
-      Serial.println(myPayload->message);
-      printPrompt();
-      break;
+  case MESS:
+    Serial.print("Message:\r\n  ");
+    Serial.println(myPayload->message);
+    printPrompt();
+    break;
 
-    case DEMO:
-      displayDemo();
-      break;
+  case DEMO:
+    displayDemo();
+    break;
 
-    default:
-      Serial.println(" Invalid command received.");
-      break;
+  default:
+    Serial.println(" Invalid command received.");
+    break;
   }
   free(myPayload); // Deallocate payload memory block
 }
@@ -294,27 +331,27 @@ void printPrompt(void){
 
 /*
 // Display LED pattern
-
-// LED numbering:
-
-           9
-       8       10
-     7           11
-   6               12
-  5                 13
-   4               14
-     3           15
-       2       16
-           1
-
-shift register 1-8: AA
-shift register 9-16: BB
-
-setValue data in hex: 0xAABB
-where AA in binary = 0b[8][7][6][5][4][3][2][1]
-      BB in binary = 0b[16][15][14][13][12][11][10][9]
-
-*/
+ 
+ // LED numbering:
+ 
+ 9
+ 8       10
+ 7           11
+ 6               12
+ 5                 13
+ 4               14
+ 3           15
+ 2       16
+ 1
+ 
+ shift register 1-8: AA
+ shift register 9-16: BB
+ 
+ setValue data in hex: 0xAABB
+ where AA in binary = 0b[8][7][6][5][4][3][2][1]
+ BB in binary = 0b[16][15][14][13][12][11][10][9]
+ 
+ */
 void ledDisplay(byte pattern) {
   setValue(0x0000);
   digitalWrite(SROEPin, LOW);
@@ -333,6 +370,7 @@ void ledDisplay(byte pattern) {
       setValue(pattern);
       delay(del);
     }
+    playTone();
   }
   else if(pattern == 1) {
     word pattern = 0x0000; // variable used in shifting process
@@ -348,6 +386,7 @@ void ledDisplay(byte pattern) {
       setValue(pattern);
       delay(del);
     }
+
   }
   else if(pattern == 2) {
     int del = 100;
@@ -443,5 +482,9 @@ void welcomeMessage(void) {
   Serial.print("Your address: ");
   Serial.println(hex_addr);
   Serial.print("\nAll commands must be terminated with a carriage return.\r\n"
-      "Type 'help' for a list of available commands.\r\n\n> ");
+    "Type 'help' for a list of available commands.\r\n\n> ");
 }
+
+
+
+
